@@ -53,6 +53,7 @@ try {
     Write-Host  $JSONBody
     $MigrateRequest = New-GraphPostRequest -NoAuthCheck $True -uri "https://traf-pcsvcadmin-prod.trafficmanager.net/CustomerServiceAdminApi/Web//v1/delegatedAdminRelationships/migrate" -type POST -body $JSONBody -verbose -tenantid $env:TenantID -scope 'https://api.partnercustomeradministration.microsoft.com/.default'
     Start-Sleep -Milliseconds 100
+	Write-Host ($MigrateRequest | ConvertTo-JSON -Compress)
     do {
         $CheckActive = New-GraphGetRequest -NoAuthCheck $True -uri "https://traf-pcsvcadmin-prod.trafficmanager.net/CustomerServiceAdminApi/Web//v1/delegatedAdminRelationships/$($MigrateRequest.id)" -tenantid $env:TenantID -scope 'https://api.partnercustomeradministration.microsoft.com/.default'
         Start-Sleep -Milliseconds 200
@@ -63,6 +64,7 @@ catch {
     Add-AzDataTableEntity @Table -Entity $logRequest -Force | Out-Null
 }
 
+Write-Host ($CheckActive | ConvertTo-JSON -Compress)
 
 if ($CheckActive.status -eq "Active") {
     $LogRequest['status'] = "Step 3: GDAP Relationship active. Mapping groups."
