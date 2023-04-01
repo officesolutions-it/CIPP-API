@@ -2,7 +2,7 @@ using namespace System.Net
 
 param($Request, $TriggerMetadata)
 
-$Groups = $QueueItem.gdapRoles
+$Groups = $Request.body.gdapRoles
 
 $Table = Get-CIPPTable -TableName GDAPMigrationGroups
 $Rows = Get-AzDataTableEntity @Table
