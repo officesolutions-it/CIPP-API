@@ -18,12 +18,32 @@ $logRequest = @{
 
 Add-AzDataTableEntity @Table -Entity $logRequest -Force | Out-Null
 
-$Table = Get-CIPPTable -TableName GDAPMigrationGroups
-$Rows = Get-AzDataTableEntity @Table
-
-$RoleMappings = $Rows | ? roleDefinitionId -in $Groups.ObjectId
-
-Write-Host "Role Mappings: $($RoleMappings | ConvertTo-JSON -Compress)"
+$RoleMappings = foreach ($group in $Groups) {
+    $randomSleep = Get-Random -Minimum 10 -Maximum 500
+    Start-Sleep -Milliseconds $randomSleep
+    $ExistingGroups = New-GraphGetRequest -NoAuthCheck $True  -uri "https://graph.microsoft.com/beta/groups" -tenantid $TenantFilter
+    try {
+        if ("M365 GDAP $($Group.Name)" -in $ExistingGroups.displayName) {
+            @{
+                GroupId          = ($ExistingGroups | Where-Object -Property displayName -EQ "M365 GDAP $($Group.Name)").id
+                roleDefinitionId = $group.ObjectId
+            }
+        }
+        else {
+            $BodyToship = [pscustomobject] @{"displayName" = "M365 GDAP $($Group.Name)"; "description" = "This group is used to manage M365 partner tenants at the $($group.name) level."; securityEnabled = $true; mailEnabled = $false; mailNickname = "M365GDAP$(($Group.Name).replace(' ',''))" } | ConvertTo-Json
+            $GraphRequest = New-GraphPostRequest -NoAuthCheck $True -uri "https://graph.microsoft.com/beta/groups" -tenantid $env:TenantID -type POST -body $BodyToship  -verbose
+            @{
+                GroupId          = $GraphRequest.Id 
+                roleDefinitionId = $group.ObjectId
+            }
+        }
+    }
+    catch {
+        $LogRequest['status'] = "Migration Failed. could not create GDAP group M365 GDAP $($Group.Name): $($_.Exception.Message)"
+        Add-AzDataTableEntity @Table -Entity $logRequest -Force | Out-Null
+        exit 1
+    }
+}
 
 if ($RoleMappings) {
     $LogRequest['status'] = "Step 2: Groups created, creating new GDAP relationship."
@@ -53,7 +73,6 @@ try {
     Write-Host  $JSONBody
     $MigrateRequest = New-GraphPostRequest -NoAuthCheck $True -uri "https://traf-pcsvcadmin-prod.trafficmanager.net/CustomerServiceAdminApi/Web//v1/delegatedAdminRelationships/migrate" -type POST -body $JSONBody -verbose -tenantid $env:TenantID -scope 'https://api.partnercustomeradministration.microsoft.com/.default'
     Start-Sleep -Milliseconds 100
-	Write-Host ($MigrateRequest | ConvertTo-JSON -Compress)
     do {
         $CheckActive = New-GraphGetRequest -NoAuthCheck $True -uri "https://traf-pcsvcadmin-prod.trafficmanager.net/CustomerServiceAdminApi/Web//v1/delegatedAdminRelationships/$($MigrateRequest.id)" -tenantid $env:TenantID -scope 'https://api.partnercustomeradministration.microsoft.com/.default'
         Start-Sleep -Milliseconds 200
@@ -64,7 +83,6 @@ catch {
     Add-AzDataTableEntity @Table -Entity $logRequest -Force | Out-Null
 }
 
-Write-Host ($CheckActive | ConvertTo-JSON -Compress)
 
 if ($CheckActive.status -eq "Active") {
     $LogRequest['status'] = "Step 3: GDAP Relationship active. Mapping groups."
