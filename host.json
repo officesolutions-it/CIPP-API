@@ -14,9 +14,6 @@
   },
   "functionTimeout": "00:10:00",
   "extensions": {
-    "queues": {
-      "maxDequeueCount": 1
-    },
     "durableTask": {
       "maxConcurrentActivityFunctions": 1,
       "maxConcurrentOrchestratorFunctions": 1
